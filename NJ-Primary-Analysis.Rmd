@@ -1,0 +1,329 @@
+---
+title: "Analyzing New Jersey's 2024 Democratic Committee Elections: Essex County"
+subtitle: Lucas Zhu
+date: "2024-06-04"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+  word_document: default
+---
+
+```{r Importing Data & Packages, echo = F, message = FALSE}
+library(rio)
+library(ggplot2)
+library(scales)
+library(stargazer)
+library(kableExtra)
+library(dplyr)
+library(pander)
+
+nj.data <- import("2024 Dem Primary Order.csv")
+```
+
+## 1 | Introduction
+  
+  On June 4th, 2024, voters across New Jersey voted for Democratic County Committee members. These seats are considered grassroots party seats, and have a key role in voting for their party chairperson.^[<https://cawp.rutgers.edu/sites/default/files/library/becoming_a_political_party_county_committee_member.pdf>] Voters in each election district (smaller subsections of their township) vote for two county committee members to represent them. 
+
+  This paper focuses on the county committee elections in Essex County, located right outside New York City and home to the most populated city in New Jersey, Newark.^[<https://www.newjersey-demographics.com/cities_by_population>]
+
+  This paper finds that Essex County Democratic Committee candidates listed higher on a ballot and candidates endorsed by their local party correlate with an increased vote share in an election. 
+
+## 2 | Background on Candidates Per Township
+
+  To gather a list of candidates in competitive elections, I looked at ballots in every township in Essex County through the clerk's website.^[<https://www.essexclerk.com/Services/30>] If an election had more than two candidates, I added the candidate's names to a spreadsheet, along with information on whether they were endorsed by their municipal party and their position number on the ballot.
+
+  Most townships had uncompetitive elections, where only party-endorsed candidates ran for seats. It should be noted that some more conservative towns, such as Essex Fells, had no candidates run for Democratic County Committee at all.^[<https://www.essexclerk.com/_Content/pdf/Essex-Fells-2024-Primary-Sample.pdf>]
+
+```{r Candidate Number Barplot, echo = F}
+township.sums <- nj.data %>%
+  group_by(Township) %>%
+  summarize(candidate.count = length(Candidate))
+
+Township <- c("Belleville", "Caldwell", "Cedar Grove", "East Orange", "Essex Fells", "Fairfield", "Glen Ridge", "Montclair", "North Caldwell", "Roseland", "West Caldwell", "West Orange")
+candidate.count <- c(rep(0, 12))
+
+none.towns <- cbind.data.frame(Township, candidate.count)
+
+township.sums <- rbind.data.frame(township.sums, none.towns)
+
+ggplot(township.sums, aes(x = reorder(Township, candidate.count), y = candidate.count, fill = Township)) +
+  geom_bar(stat = "identity", color = "black", fill = "dodgerblue") +
+  geom_text(aes(label = candidate.count),
+            size = 3, hjust = -0.325) +
+  labs(title = "Number of Candidates By Township",
+       subtitle = "Competitive Essex County DCC Elections") +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  xlab("") +
+  ylab("Number of Candidates") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 8)) + coord_flip() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+```
+
+Of Essex County's 21 townships, Bloomfield had the most number of candidates running in competitive county committee elections by far. Many non-party-endorsed county committee candidates ran under the "Democrats United for Change and Integrity" slogan tied closely to incumbent Bloomfield Mayor Ted Gamble, who did not have party support and ultimately lost re-election.^[<https://www.insidernj.com/mundell-wins/>] I presume that his race against party-backed councilwoman Jenny Mundell was likely associated with the surge of competitive challenges to the local party.
+
+```{r Bloomfield Candidates, echo = F}
+bloomfield <- nj.data[nj.data$Township == "Bloomfield",]
+bloomfield$`Party Endorsed?`[bloomfield$`Party Endorsed?` == F] <- "Not Party-Endorsed"
+bloomfield$`Party Endorsed?`[bloomfield$`Party Endorsed?` == T] <- "Party-Endorsed"
+set.caption("Number of Party Endorsed vs. Non-Party Endorsed Candidates in Bloomfield")
+pander(table(bloomfield$`Party Endorsed?`))
+```
+
+Newark also had a significant number of candidates challenge party-backed candidates. Most of the candidates ran in the West Ward, with most candidates running under the "Newark West Ward Democratic Committee" slogan or the "West Ward Forward" slogan.^[<https://www.essexclerk.com/_Content/pdf/Newark-2024-Primary-Sample.pdf>]
+
+```{r Newark Ward Candidates, echo=F}
+newark <- nj.data[nj.data$Township == "Newark",]
+
+newark.wards <- c("NORTH", "CENTRAL")
+newark.zero <- c(rep(0, 2))
+none.newark <- cbind.data.frame(newark.wards, newark.zero)
+
+newark.ward.freq <- data.frame((table(newark$Ward)))
+
+none.newark <- dplyr::rename(none.newark,
+       Var1 = newark.wards,
+       Freq = newark.zero)
+
+newark.ward.freq <- rbind.data.frame(newark.ward.freq, none.newark)
+
+ggplot(newark.ward.freq, aes(x = reorder(Var1, -Freq), y = Freq, fill = Var1)) +
+  geom_bar(stat = "identity", color = "black", fill = "purple4") +
+  geom_text(aes(label = Freq),
+            size = 3.5, hjust = 0.5, vjust = -0.5) +
+  ggtitle("Number of Candidates By Ward (Newark)",
+          subtitle = "Competitive Essex County Democratic County Committee Elections") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlab("\n Ward") +
+  ylab("Number of Candidates") +
+  theme_classic() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 10)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.subtitle = element_text(hjust = 0.5))
+```
+
+```{r, echo = F}
+newark$Slogan[newark$`Party Endorsed?` == TRUE] <- "Essex County Democratic Committee, Inc."
+newark.west.ward <- newark[newark$Ward == "WEST",]
+
+newark.west.ward$Slogan[newark.west.ward$Slogan == "Essex County Democratic Committee, Inc."] <- "Party Endorsed"
+# newark.west.ward$Slogan[newark.west.ward$Slogan == "Newark West Ward Democratic Committee"] <- "NWWDC"
+# newark.west.ward$Slogan[newark.west.ward$Slogan == "West Ward Forward"] <- "WWF"
+
+
+west.ward.freq <- data.frame((table(newark.west.ward$Slogan)))
+
+west.ward.freq <- rename(west.ward.freq,
+       slogan = Var1,
+       candidates = Freq)
+
+set.caption("Number of West Ward Candidates by Slogan Endorsement")
+pander(west.ward.freq)
+
+# ggplot(west.ward.freq, aes(x = reorder(Var1, -Freq), y = Freq, fill = Var1)) +
+#   geom_bar(stat = "identity", color = "black", fill = "darkorange") +
+#     geom_text(aes(label = Freq),
+#             size = 3.5, hjust = 0.5, vjust = -0.5) +
+#   ggtitle("Newark West Ward Slogans",
+#           subtitle = "Competitive Essex County Democratic County Committee Elections") +
+#   theme(plot.title = element_text(hjust = 0.5)) + 
+#   xlab("") +
+#   ylab("Number of Candidates") +
+#   theme_classic() +
+#   theme(legend.position = "none",
+#         axis.text.x = element_text(size = 10))
+```
+
+## 3 | Impact of Party Endorsements
+
+  When considering the impact of party endorsement (as indicated by the "Essex County Democratic Committee, Inc." slogan on the ballot), the average vote share for party-endorsed candidates in these competitive elections was 30.65% as opposed to 24.78% for unendorsed candidates. This indicates a slight advantage for party-endorsed candidates that bore the "Essex County Democratic Committee, Inc." slogan below their ballot. 
+
+```{r Endorsement Impact Table, echo=F}
+results <- import("NJ Results 2024.csv")
+
+keep <- c("choice name", "percent of votes")
+results <- results[keep]
+
+merged.result <- merge(nj.data, results, by.x = "Candidate", by.y = "choice name")
+merged.result$`VOTE COUNT` <- NULL
+merged.result$`VOTE %` <- NULL
+
+vote.share <- NA
+vote.share[1] <- mean(merged.result$`percent of votes`[merged.result$`Party Endorsed?` == TRUE])
+vote.share[2] <- mean(merged.result$`percent of votes`[merged.result$`Party Endorsed?` == FALSE])
+
+vote.share[1] <- round(vote.share[1], 2)
+vote.share[2] <- round(vote.share[2], 2)
+
+endorsement.status <- c("Party Endorsed", "Not Party Endorsed")
+endorsement.impact <- cbind.data.frame(endorsement.status, vote.share)
+
+set.caption("Effect of Party Endorsement on Essex County Candidates")
+pander(endorsement.impact)
+```
+
+```{r Endorsement Boxplot, echo=F}
+merged.result$`Party Endorsed?`[merged.result$`Party Endorsed?` == "TRUE"] <- "Party-Endorsed"  
+merged.result$`Party Endorsed?`[merged.result$`Party Endorsed?` == "FALSE"] <- "Not Party-Endorsed"
+
+ggplot(merged.result, aes(x = `percent of votes`, y = `Party Endorsed?`)) +
+  geom_boxplot() +
+  labs(title = "Impact of Party Endorsement on Vote Share",
+       x = "\n Percentage of Votes",
+       y = "") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_x_continuous(limits = c(0, 80), breaks = seq(0, 80, 20),
+                     labels = percent_format(scale = 1))
+```
+
+When broken down by township, Newark's non-party-endorsed candidates performed better than their party-endorsed candidates. For other towns (other than Nutley, and debatably, South Orange), however, the opposite was true. The limitations of these boxplots should be noted as many towns had less than 10 candidates in competitive county committee elections and thus have limited data points.
+
+Other than Newark, in towns with more than 10 candidates running in competitive elections (Bloomfield, Livingston, & Orange), party-endorsed candidates appeared to perform fairly better than non-party-endorsed candidates.
+
+```{r Endorsement Impact By Town, echo = F}
+ggplot(merged.result, aes(x = `percent of votes`, y = `Party Endorsed?`)) +
+  geom_boxplot() +
+  labs(title = "Impact of Party Endorsement on Vote Share (By Township)",
+       x = "\n Percentage of Votes",
+       y = "") +
+  facet_wrap(vars(`Township`)) +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  scale_x_continuous(limits = c(0, 75), breaks = seq(0, 75, 20),
+                     labels = percent_format(scale = 1))
+```
+
+Interestingly, it should also be noted that a handful of the most successful non-party-endorsed candidates are from Newark's West Ward. Of the non-party-endorsed candidates receiving over 50% of the vote, three of the four (Alex Lorenzo, Robert Kevin Waters, & Lavita E. Johnson) were from Newark's West Ward, with the fourth being Cindi S. Gilmore of Bloomfield's 3rd ward.
+
+When investigating this further, it seems that the West Ward Forward slogan actually outperformed those that were endorsed by the Essex County Democratic Party by a fair amount. In fact, the Essex County Democratic Party slogan appeared to perform the weakest compared to the WWF and NWWDC.
+
+```{r, echo = F}
+west.ward.merged <- merge(newark.west.ward, results, by.x = "Candidate", by.y = "choice name")
+
+ggplot(west.ward.merged, aes(x = `percent of votes`, y = Slogan)) +
+  geom_boxplot() +
+  labs(title = "Campaign Slogans and Vote Share",
+       subtitle = "Newark West Ward",
+       x = "\n Percentage of Votes",
+       y = "") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  scale_x_continuous(limits = c(0, 80), breaks = seq(0, 80, 20),
+                     labels = percent_format(scale = 1))
+```
+
+
+## 4 | Impact of Ballot Position
+
+Next, when considering the impact of a candidate’s ballot position on the election’s results, the vote share means for each ballot position appears to fall as one moves down the ballot. This makes sense as these elections are typically last on the ballot and include candidates with low name recognition. 
+
+```{r Position Means Barplot, echo = F}
+position.means <- rep(NA, 6)
+position.numbers <- c(1, 2, 3, 4, 5, 6)
+for (i in 1:6) {
+  position.means[i] <- mean(merged.result$`percent of votes`[merged.result$`Position Number` == position.numbers[i]])
+}
+
+position.and.means <- cbind.data.frame(position.numbers, position.means)
+set.caption("Candidate Position and Mean Vote Share")
+pander(position.and.means)
+
+# ggplot(position.and.means, aes(position.numbers, position.means)) + 
+#   geom_bar(stat = "identity", color = "black", fill = "dodgerblue4") +
+#   geom_text(aes(label = round(position.means, 1)),
+#             size = 4, vjust = -0.4) +
+#   ggtitle("Position Numbers and Mean Vote Share") +
+#   ylab("Mean Vote Share") +
+#   theme_classic() +
+#   theme(legend.position = "none",
+#         axis.text.x = element_text(size = 12)) +
+#   theme(plot.title = element_text(hjust = 0.5)) +
+#   scale_y_continuous(labels = percent_format(scale = 1)) +
+#   scale_x_discrete(name ="Ballot Position", 
+#                     limits=c("1","2","3", "4", "5", "6"))
+
+ggplot(merged.result, aes(x = `percent of votes`, y = as.factor(`Position Number`))) +
+  geom_boxplot() +
+  labs(title = "Position Number and Vote Share",
+       subtitle = "Competitive Essex County Democratic County Committee Elections",
+       x = "\n Percentage of Votes",
+       y = "Position Number") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  scale_x_continuous(limits = c(0, 80), breaks = seq(0, 80, 20),
+                     labels = percent_format(scale = 1))
+
+```
+There are some limitations to positions 5 and 6, however, as only two candidates filled position 5 (Michael HUTCHINSON of Bloomfield's 2nd Ward-4th District and Amina HYLTON of Newark's West Ward-25th District) and one candidate filled position 6 (Marilyn BONICA of Bloomfield's 2nd Ward-4th District).
+
+As seen here, most of these competitive elections only had 3 or 4 candidates running in them.
+
+```{r Candidates Per Ballot Position, echo = F}
+candidate.positions <- data.frame((table(nj.data$`Position Number`)))
+candidate.positions <- rename(candidate.positions,
+                              position = Var1,
+                              candidates = Freq)
+
+set.caption("Number of Candidates Per Candidate Position")
+pander(candidate.positions)
+
+# ggplot(candidate.positions, aes(x = Var1, y = Freq, fill = Var1)) +
+#   geom_bar(stat = "identity", color = "black", fill = "darkgreen") +
+#   geom_text(aes(label = Freq),
+#             size = 3.5, hjust = 0.5, vjust = -0.5) +
+#   ggtitle("Number of Candidates By Ballot Position",
+#           subtitle = "Competitive Essex County Democratic County Committee Elections") +
+#   theme(plot.title = element_text(hjust = 0.5)) + 
+#   xlab("Ballot Position") +
+#   ylab("Number of Candidates") +
+#   theme_classic() +
+#   theme(legend.position = "none",
+#         axis.text.x = element_text(size = 10))
+```
+
+## 5 | Creating a Regression
+
+After running a regression comparing ballot position to the vote share candidates got, it appears clear that ballot position played a fairly large negative role in determining one's vote share. Since the number of candidates running in an election can impact a candidate’s ballot position and the vote share candidates get, I hold this variable constant. After doing so and holding constant if a candidate received the party endorsement, Essex County Democratic Committee candidates on average lose 4.6 percentage points for each position they move down the ballot. (i.e. from 1st to 2nd, 2nd to 3rd, etc.).
+
+```{r Position & Endorsement Regression, echo = F}
+ggplot(merged.result) +
+  geom_point(aes(x = `Position Number`, 
+                 y = `percent of votes`,
+                 col = as.factor(`Party Endorsed?`)),
+             # Making the color correspond with party endorsement
+             pch = 1) +
+  ggtitle("Ballot Position (and party endorsement) vs. Vote Share",
+          subtitle = "Competitive Essex County Democratic Committee Elections") +
+  xlab("\n Ballot Position") +
+  ylab("Vote Share") +
+  theme_gray() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  scale_y_continuous(limits = c(0, 75), breaks = seq(0, 75, 10),
+                     labels = percent_format(scale = 1)) +
+  scale_x_continuous(limits = c(1, 6), breaks = seq(1, 6, 1)) +
+  theme(legend.position = "bottom") +
+  scale_color_manual(values = c("darkorange", "purple3"),
+                     labels = c("Not Party-Endorsed", "Party-Endorsed")) +
+  labs(col = "") +
+  
+# Plotting regression lines based on the regression values that I find below
+ geom_abline(intercept = 49.681, slope = -4.582, color ="darkorange", linewidth = 0.5) +
+ geom_abline(intercept = 49.681 + 5.880, slope = -4.582, color ="purple3", linewidth = 0.5)
+```
+
+```{r, echo = F}
+m <- lm(merged.result$`percent of votes` ~ merged.result$`Position Number`)
+m1 <- lm(merged.result$`percent of votes` ~ merged.result$`Position Number` + merged.result$`Party Endorsed?`)
+m2 <- lm(merged.result$`percent of votes` ~ merged.result$`Position Number` + merged.result$`Party Endorsed?` + merged.result$`Number of Candidates`)
+stargazer(m, m1, m2, type = "text")
+```
+
+After holding a candidate’s ballot position constant and the number of candidates in an election constant, having the party endorsement, on average, increases a candidate's vote share by approximately 5.8 percentage points. This regression indicates that both ballot position (negative impact as the number increases) and party endorsement (positive impact when received) have an impact on the vote share candidates received in the Essex County Democratic Committee elections. 
+
+## 5 | Conclusion
+
+Overall, the Essex County Democratic County Committee elections demonstrated that ballot positioning and party endorsements have large effects in down-ballot, low-information elections. This remains particularly relevant in a potential environment where organization lines are abolished.^[<https://www.cnn.com/2024/03/29/politics/new-jersey-ballot-county-line/index.html>] 
